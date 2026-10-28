@@ -33,6 +33,7 @@ internal sealed class NguiModManager
     private const int CheckboxIconSize = 12;
     private const int CheckboxGutter = 30;
     private const int StatusWidth = 130;
+    private const int WheelStep = 56;
     private const uint SteamAppId = 599140;
 
     private static readonly HashSet<string> SizeScaled = new(StringComparer.Ordinal)
@@ -62,6 +63,7 @@ internal sealed class NguiModManager
     private bool _failed;
     private float _nextAttempt;
     private int _initAttempts;
+    private bool _scrollHooked;
     private Sprite _checkboxOn;
     private Sprite _checkboxOff;
     private Sprite _checkboxFrame;
@@ -195,6 +197,12 @@ internal sealed class NguiModManager
         NeutralizeNativeActions(_window);
         RefreshPanels();
         LogWindowSummary();
+
+        // The save-slots screen can only be dragged; NGUI's scroll view is not wired to the
+        // mouse wheel. Subscribe so the mod list also scrolls with the wheel.
+        UICamera.onScroll -= OnCameraScroll;
+        UICamera.onScroll += OnCameraScroll;
+        _scrollHooked = true;
     }
 
     /// <summary>
@@ -209,6 +217,30 @@ internal sealed class NguiModManager
             panel.SetDirty();
             panel.Refresh();
         }
+    }
+
+    /// <summary>
+    /// UICamera only delivers OnScroll to the hovered object and the save-slots screen is
+    /// drag-only, so the wheel is forwarded to the list's scroll view from here. Filtering on
+    /// the hovered transform keeps scrolls outside the window out of it.
+    /// </summary>
+    private void OnCameraScroll(GameObject hovered, float delta)
+    {
+        if (_window == null || !_window.is_shown || _windowRoot == null) return;
+        if (hovered == null) return;
+        if (hovered != _windowRoot && !hovered.transform.IsChildOf(_windowRoot.transform)) return;
+
+        ScrollByWheel(delta);
+    }
+
+    private void ScrollByWheel(float delta)
+    {
+        if (_scroll == null || Mathf.Approximately(delta, 0f)) return;
+
+        // Wheel up (positive delta) pulls the content down so earlier rows come into view.
+        var step = -Mathf.Sign(delta) * WheelStep;
+        _scroll.MoveRelative(new Vector3(0f, step, 0f));
+        _scroll.RestrictWithinBounds(true);
     }
 
     private void LogWindowSummary()
@@ -294,6 +326,11 @@ internal sealed class NguiModManager
             // Anchors would overwrite the sizes below the next time the GUI recalculates them.
             ClearAnchors(widget);
 
+            // The close button keeps its native size, so scaling the offset of its decorative
+            // frame would tear the frame away from the cross and the header would look like it
+            // has two close buttons. Everything below the button stays at its authored offset.
+            if (path.StartsWith(ClosePath + "/", StringComparison.Ordinal)) continue;
+
             var position = widget.transform.localPosition;
             widget.transform.localPosition = new Vector3(position.x * WidthScale, position.y * HeightScale, position.z);
 
@@ -301,6 +338,11 @@ internal sealed class NguiModManager
 
             widget.width = Mathf.RoundToInt(widget.width * WidthScale);
             widget.height = Mathf.RoundToInt(widget.height * HeightScale);
+
+            // Colliders do not follow their widget, and an unscaled drag area would leave most
+            // of the list un-draggable.
+            var box = widget.GetComponent<BoxCollider2D>();
+            if (box != null) box.size = new Vector2(box.size.x * WidthScale, box.size.y * HeightScale);
         }
 
         var panel = _scroll != null ? _scroll.panel : null;
@@ -1161,6 +1203,12 @@ internal sealed class NguiModManager
 
     private void DestroyClones()
     {
+        if (_scrollHooked)
+        {
+            UICamera.onScroll -= OnCameraScroll;
+            _scrollHooked = false;
+        }
+
         if (_windowRoot != null) UnityEngine.Object.Destroy(_windowRoot);
         if (_entry != null) UnityEngine.Object.Destroy(_entry);
 

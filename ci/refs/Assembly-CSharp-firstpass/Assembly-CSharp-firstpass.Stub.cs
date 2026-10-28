@@ -56,9 +56,11 @@ public class UIButtonColor : UIWidgetContainer
 
 public class UICamera : UnityEngine.MonoBehaviour
 {
+    public static UICamera.FloatDelegate onScroll;
     public bool useKeyboard;
     public bool useMouse;
     public bool useTouch;
+    public delegate void FloatDelegate(UnityEngine.GameObject go, float delta);
 }
 
 public class UIDrawCall : UnityEngine.MonoBehaviour
@@ -159,7 +161,9 @@ public class UIRect : UnityEngine.MonoBehaviour
 
 public class UIScrollView : UnityEngine.MonoBehaviour
 {
+    public void MoveRelative(UnityEngine.Vector3 relative) { }
     public void ResetPosition() { }
+    public bool RestrictWithinBounds(bool instant) => throw null;
     public UIPanel panel { get; }
 }
 

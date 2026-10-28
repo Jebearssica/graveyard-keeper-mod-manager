@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.1
+
+- **Fixed two close buttons in the title bar.** The window is drawn wider than the save screen it is cloned from, and the close button's decorative frame was being moved with it, so the frame drifted away from the cross and read as a second button. The frame now stays attached to the cross, matching the game's own windows.
+- **Mouse wheel now scrolls the mod list.** The game's save list only supports click-and-drag, so the wheel did nothing on a list this long. Both wheel directions now scroll, and dragging works across the full list area instead of only its middle.
+
 ## 1.1.0
 
 - **New native window.** The mod list now uses the game's own window frame, fonts, scroll view and dialogs, and scales with the game's resolution and UI scale setting.

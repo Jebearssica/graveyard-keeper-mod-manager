@@ -13,6 +13,7 @@ It adds a **MODS** entry to the main menu that opens a list of every installed B
 - **Native-looking window** - the list reuses the game's own frame, fonts, scroll view and dialogs, and follows your resolution and UI scale.
 - **One click per mod** - click a row to enable or disable it. A check box on the left shows the state at a glance.
 - **Readable descriptions** - long mod names and descriptions wrap onto multiple lines instead of being cut off, and each row grows to fit.
+- **Scrolls like you expect** - the list follows the mouse wheel and can also be dragged.
 - **Dependency safety** - disabling a mod that another enabled mod hard-depends on asks for confirmation first.
 - **Restart prompt** - when you close the window after changing something, the manager offers to restart the game for you.
 - **English and Simplified Chinese** - the interface and the built-in mod descriptions follow the game's language setting.
