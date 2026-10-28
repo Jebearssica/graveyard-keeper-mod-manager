@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!-- Regenerates the compile-only game API stubs in ci/refs. See ci/README.md. -->
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net8.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>disable</Nullable>
+        <AssemblyName>stubgen</AssemblyName>
+        <RootNamespace>StubGen</RootNamespace>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Mono.Cecil" Version="0.11.5" />
+    </ItemGroup>
+
+</Project>

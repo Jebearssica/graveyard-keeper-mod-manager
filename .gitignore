@@ -2,6 +2,7 @@
 bin/
 obj/
 dist/
+GKModManager_v*.zip
 
 # IDE
 .vs/

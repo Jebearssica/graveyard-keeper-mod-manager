@@ -1,0 +1,153 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  DOTNET_NOLOGO: 'true'
+  DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+  # The plugin is compiled against the BepInEx version the README asks users to install.
+  BEPINEX_VERSION: '5.4.23.6'
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Download BepInEx
+        shell: pwsh
+        run: |
+          $core = Join-Path $env:RUNNER_TEMP 'bepinex/BepInEx/core/BepInEx.dll'
+          $zip = Join-Path $env:RUNNER_TEMP 'bepinex.zip'
+          $url = "https://github.com/BepInEx/BepInEx/releases/download/v$env:BEPINEX_VERSION/BepInEx_win_x64_$env:BEPINEX_VERSION.zip"
+          Write-Host "Downloading $url"
+          Invoke-WebRequest -Uri $url -OutFile $zip
+          Expand-Archive -Path $zip -DestinationPath (Join-Path $env:RUNNER_TEMP 'bepinex') -Force
+          if (-not (Test-Path $core)) { throw "Archive did not contain $core" }
+
+      - name: Resolve version
+        id: version
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_REF -like 'refs/tags/v*') {
+            $version = $env:GITHUB_REF.Substring('refs/tags/v'.Length)
+          } else {
+            $version = (Select-String -Path 'src/GKModManager.csproj' -Pattern '<Version>([^<]+)</Version>').Matches[0].Groups[1].Value
+          }
+          Write-Host "version=$version"
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "version=$version"
+
+      # The game assemblies are not redistributable, so the build compiles against the
+      # declaration-only stubs in ci/refs instead. See ci/README.md.
+      - name: Build
+        shell: pwsh
+        run: |
+          dotnet build 'src/GKModManager.csproj' -c Release --nologo `
+            -p:UseGameRefs=false `
+            -p:DeployToGame=false `
+            "-p:BepInExCore=$env:RUNNER_TEMP\bepinex\BepInEx\core" `
+            "-p:Version=${{ steps.version.outputs.version }}"
+          exit $LASTEXITCODE
+
+      - name: Package
+        id: package
+        shell: pwsh
+        run: |
+          $name = "GKModManager_v${{ steps.version.outputs.version }}.zip"
+
+          $stage = Join-Path $env:RUNNER_TEMP 'stage'
+          $root = Join-Path $stage 'BepInEx/plugins/GKModManager'
+          Remove-Item $stage -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path (Join-Path $root 'lang') | Out-Null
+
+          $output = 'src/bin/Release'
+          Copy-Item (Join-Path $output 'GKModManager.dll') $root
+          Copy-Item 'CHANGELOG.md' $root
+          Copy-Item (Join-Path $output 'lang/*.json') (Join-Path $root 'lang')
+
+          # Compress-Archive writes backslash separators on Windows, which some tools refuse
+          # to unpack. Build the archive by hand so entry names stay forward-slashed.
+          Add-Type -AssemblyName System.IO.Compression
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          Remove-Item $name -Force -ErrorAction SilentlyContinue
+          $zip = [System.IO.Compression.ZipFile]::Open(
+            (Join-Path (Get-Location) $name), [System.IO.Compression.ZipArchiveMode]::Create)
+          try {
+            $prefix = $stage.TrimEnd('\') + '\'
+            foreach ($file in Get-ChildItem -Path $stage -Recurse -File) {
+              $entry = $file.FullName.Substring($prefix.Length).Replace('\', '/')
+              [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile($zip, $file.FullName, $entry) | Out-Null
+            }
+          } finally {
+            $zip.Dispose()
+          }
+
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "name=$name"
+          Write-Host "$name ($((Get-Item $name).Length) bytes)"
+
+      - name: Verify package
+        shell: pwsh
+        run: |
+          $name = '${{ steps.package.outputs.name }}'
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $zip = [System.IO.Compression.ZipFile]::OpenRead((Join-Path (Get-Location) $name))
+          try {
+            $entries = $zip.Entries | ForEach-Object { $_.FullName } | Sort-Object
+          } finally {
+            $zip.Dispose()
+          }
+          $entries | ForEach-Object { Write-Host "  $_" }
+
+          $expected = @(
+            'BepInEx/plugins/GKModManager/CHANGELOG.md'
+            'BepInEx/plugins/GKModManager/GKModManager.dll'
+            'BepInEx/plugins/GKModManager/lang/GKModManager.en.json'
+            'BepInEx/plugins/GKModManager/lang/GKModManager.zh_cn.json'
+          )
+          $missing = $expected | Where-Object { $entries -notcontains $_ }
+          if ($missing) { throw "Package is missing: $($missing -join ', ')" }
+          if ($entries | Where-Object { $_ -match '\\' }) { throw 'Zip entries must use forward slashes' }
+          if ($entries | Where-Object { $_ -match '\.pdb$|\.cs$|/src/' }) { throw 'Package must not contain sources or symbols' }
+          Write-Host "sha256 $((Get-FileHash $name -Algorithm SHA256).Hash)"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: GKModManager_v${{ steps.version.outputs.version }}
+          path: GKModManager_v${{ steps.version.outputs.version }}.zip
+          if-no-files-found: error
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = $env:GITHUB_REF.Substring('refs/tags/'.Length)
+          $name = '${{ steps.package.outputs.name }}'
+
+          gh release view $tag --repo $env:GITHUB_REPOSITORY 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "Release $tag exists, replacing asset $name"
+            gh release upload $tag $name --clobber --repo $env:GITHUB_REPOSITORY
+          } else {
+            gh release create $tag $name --verify-tag --title $tag --generate-notes --repo $env:GITHUB_REPOSITORY
+          }
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          gh release view $tag --repo $env:GITHUB_REPOSITORY

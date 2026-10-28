@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+        Compile-only stand-in for the game's Assembly-CSharp.dll.
+        Lets CI build the plugin without a game install. See ci/README.md.
+    -->
+    <PropertyGroup>
+        <TargetFramework>net481</TargetFramework>
+        <AssemblyName>Assembly-CSharp</AssemblyName>
+        <RootNamespace></RootNamespace>
+        <!-- Matches the shipped Assembly-CSharp so the plugin's AssemblyRef is identical. -->
+        <AssemblyVersion>11.0.0.0</AssemblyVersion>
+        <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+        <GenerateDocumentationFile>false</GenerateDocumentationFile>
+        <Deterministic>true</Deterministic>
+        <DebugType>none</DebugType>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="UnityEngine.Modules" Version="2021.3.33" IncludeAssets="compile" PrivateAssets="all" />
+        <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+        <ProjectReference Include="..\Assembly-CSharp-firstpass\Assembly-CSharp-firstpass.csproj" Private="false" />
+    </ItemGroup>
+
+</Project>

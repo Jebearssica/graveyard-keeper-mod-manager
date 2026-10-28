@@ -117,6 +117,14 @@ dotnet build src/GKModManager.csproj -c Release -p:GameDir="C:\Program Files (x8
 
 `GameDir` defaults to the standard Steam path. When the folder contains `BepInEx\plugins`, the build deploys straight into it; otherwise the output goes to `src\bin\Release`.
 
+Releases are built by [`.github/workflows/build.yml`](.github/workflows/build.yml) on every `v*` tag. Because the game's assemblies cannot be redistributed, CI compiles against the declaration-only stubs in [`ci/refs`](ci/refs) instead:
+
+```powershell
+dotnet build src/GKModManager.csproj -c Release -p:UseGameRefs=false -p:BepInExCore=<BepInEx>\core
+```
+
+See [`ci/README.md`](ci/README.md) for how those stubs are generated and why a build against them is identical to a build against the real game.
+
 ## Compatibility
 
 - Works with any BepInEx 5 plugin, including ones that do not know about this mod.

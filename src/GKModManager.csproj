@@ -16,26 +16,43 @@
         <NoWarn>CS1591;Publicizer001</NoWarn>
         <DebugType>portable</DebugType>
         <Deterministic>true</Deterministic>
+        <!-- Keep the published DLL free of the git commit hash the SDK would append. -->
+        <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
         <!-- Reference assemblies are supplied by the game; never copy them next to the plugin. -->
         <GenerateDependencyFile>false</GenerateDependencyFile>
     </PropertyGroup>
 
     <!--
-        Point GameDir at your Graveyard Keeper install, either here or on the command line:
-            dotnet build src/GKModManager.csproj -c Release -p:GameDir="D:\Games\Graveyard Keeper"
-        The default matches a standard Steam library layout.
+        Two ways to build.
+
+        Against a real install (the default, no arguments needed):
+            dotnet build src/GKModManager.csproj -c Release
+        Override the location with -p:GameDir="D:\Games\Graveyard Keeper". When the game has
+        BepInEx installed the plugin is copied straight into it.
+
+        Without a game install, using the declaration-only stubs in ci/refs (what CI does):
+            dotnet build src/GKModManager.csproj -c Release -p:UseGameRefs=false -p:BepInExCore=<dir>
+        BepInEx itself has to come from an extracted BepInEx release.
     -->
     <PropertyGroup>
         <GameDir Condition="'$(GameDir)' == ''">C:\Program Files (x86)\Steam\steamapps\common\Graveyard Keeper</GameDir>
-        <ManagedDir>$(GameDir)\Graveyard Keeper_Data\Managed</ManagedDir>
-        <BepInExCore>$(GameDir)\BepInEx\core</BepInExCore>
-        <!-- Deploy straight into the game when it exists; otherwise just build into bin\. -->
-        <PluginDir Condition="Exists('$(GameDir)\BepInEx\plugins')">$(GameDir)\BepInEx\plugins\GKModManager</PluginDir>
+        <ManagedDir Condition="'$(ManagedDir)' == ''">$(GameDir)\Graveyard Keeper_Data\Managed</ManagedDir>
+        <BepInExCore Condition="'$(BepInExCore)' == ''">$(GameDir)\BepInEx\core</BepInExCore>
+
+        <UseGameRefs Condition="'$(UseGameRefs)' == '' AND Exists('$(ManagedDir)\Assembly-CSharp.dll')">true</UseGameRefs>
+        <UseGameRefs Condition="'$(UseGameRefs)' == ''">false</UseGameRefs>
+
+        <DeployToGame Condition="'$(DeployToGame)' == '' AND Exists('$(GameDir)\BepInEx\plugins')">true</DeployToGame>
+        <DeployToGame Condition="'$(DeployToGame)' == ''">false</DeployToGame>
+
+        <PluginDir Condition="'$(DeployToGame)' == 'true'">$(GameDir)\BepInEx\plugins\GKModManager</PluginDir>
         <OutputPath Condition="'$(PluginDir)' != ''">$(PluginDir)</OutputPath>
     </PropertyGroup>
 
     <ItemGroup>
         <PackageReference Include="BepInEx.PluginInfoProps" Version="2.1.0" PrivateAssets="all" />
+        <!-- Keeps net481 buildable on machines without the .NET Framework targeting pack. -->
+        <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
     </ItemGroup>
 
     <!--
@@ -43,7 +60,7 @@
         (GameSettings._cur_lng), so the game assemblies are publicized at build time only.
         Nothing is written back to the game directory.
     -->
-    <ItemGroup>
+    <ItemGroup Condition="'$(UseGameRefs)' == 'true'">
         <PackageReference Include="BepInEx.AssemblyPublicizer.MSBuild" Version="0.4.3"
                           PrivateAssets="all" ExcludeAssets="compile;runtime" />
         <Publicize Include="Assembly-CSharp" PublicizeTarget="All"
@@ -65,6 +82,10 @@
             <HintPath>$(BepInExCore)\Mono.Cecil.dll</HintPath>
             <Private>false</Private>
         </Reference>
+    </ItemGroup>
+
+    <!-- Against the real game: only the assemblies that are actually compiled against. -->
+    <ItemGroup Condition="'$(UseGameRefs)' == 'true'">
         <Reference Include="Assembly-CSharp">
             <HintPath>$(ManagedDir)\Assembly-CSharp.dll</HintPath>
             <Private>false</Private>
@@ -121,6 +142,14 @@
             <HintPath>$(ManagedDir)\UnityEngine.ImageConversionModule.dll</HintPath>
             <Private>false</Private>
         </Reference>
+    </ItemGroup>
+
+    <!-- Without the game: stubs for the game assemblies, Unity modules from NuGet. -->
+    <ItemGroup Condition="'$(UseGameRefs)' != 'true'">
+        <PackageReference Include="UnityEngine.Modules" Version="2021.3.33" IncludeAssets="compile" PrivateAssets="all" />
+        <ProjectReference Include="..\ci\refs\Assembly-CSharp-firstpass\Assembly-CSharp-firstpass.csproj" Private="false" />
+        <ProjectReference Include="..\ci\refs\Assembly-CSharp\Assembly-CSharp.csproj" Private="false" />
+        <Compile Include="..\ci\IgnoresAccessChecksTo.cs" Link="Shared\IgnoresAccessChecksTo.cs" />
     </ItemGroup>
 
     <!-- Language files must sit next to the DLL. -->
