@@ -38,8 +38,8 @@ during a normal build.
 ## Why it is trustworthy
 
 Rebuilding `GKModManager.dll` against `ci/refs` and against the real game assemblies produces
-the same IL, byte for byte, for every type and method — the only difference is the assembly
-metadata hash. The stubs are not approximation: if a signature, enum value or default argument
-were wrong, the emitted IL would differ.
+the same IL, byte for byte, for every type and method. With the same .NET SDK the two builds
+differ only in the assembly metadata hash. The stubs are not an approximation: if a signature,
+enum value or default argument were wrong, the emitted IL would differ.
 
 If you change `ci/refs` by hand, verify it that way before checking the change in.
