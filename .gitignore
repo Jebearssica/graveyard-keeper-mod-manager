@@ -1,0 +1,20 @@
+# Build output
+bin/
+obj/
+dist/
+
+# IDE
+.vs/
+.vscode/
+*.user
+*.suo
+*.DotSettings.user
+
+# Local build overrides (never commit machine paths)
+Environment.props
+*.local.props
+
+# OS noise
+Thumbs.db
+desktop.ini
+.DS_Store
