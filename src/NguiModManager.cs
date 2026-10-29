@@ -15,7 +15,7 @@ namespace GKModManager;
 /// into the game assemblies; the save-slots window supplies the frame, scroll view and
 /// row prefab, and the main-menu exit item supplies the entry button.
 /// </summary>
-internal sealed class NguiModManager
+internal sealed partial class NguiModManager
 {
     private const string WindowPath = "window";
     private const string TitlePath = "window/front panel/header/header label";
@@ -404,8 +404,15 @@ internal sealed class NguiModManager
         {
             if (_window.is_shown) return;
 
+            // Always open on the mod list, even when the window was last closed from the
+            // settings view.
+            _settingsMod = null;
+            _settingsFields.Clear();
+
             InvokeBaseOpen(_window, true);
             RefreshRows();
+            CaptureEnabledSnapshot();
+            SetWindowTitle(Lang.Get("mm.window.title"));
             if (_menu != null && _menu.is_shown) _menu.Hide();
 
         }
@@ -638,6 +645,20 @@ internal sealed class NguiModManager
 
         _rows.Clear();
 
+        if (InSettingsView) BuildSettingRows();
+        else BuildModRows();
+
+        _table.Reposition();
+        _scroll.ResetPosition();
+        RefreshPanels();
+    }
+
+    private void BuildModRows()
+    {
+        // Leaving the settings view: drop the references to the rows that have just been destroyed.
+        _fieldLabels.Clear();
+        _fieldRows.Clear();
+
         var loaded = new HashSet<string>(Chainloader.PluginInfos.Keys, StringComparer.OrdinalIgnoreCase);
         _mods = ModScanner.Scan(
             BepInEx.Paths.PluginPath,
@@ -649,10 +670,6 @@ internal sealed class NguiModManager
         foreach (var mod in _mods)
             CreateRow(mod);
 
-        _table.Reposition();
-        _scroll.ResetPosition();
-        RefreshPanels();
-        CaptureEnabledSnapshot();
         Plugin.Log.LogInfo($"NGUI window populated with {_mods.Count} mods.");
     }
 
@@ -674,14 +691,15 @@ internal sealed class NguiModManager
         slot.txt_descr.text = Descriptions.For(mod);
         slot.txt_stats.text = Truncate(mod.Guid, 44);
 
-        ApplyRowLayout(row, slot, mod);
-
         var gamepad = row.GetComponent<GamepadNavigationItem>();
         if (gamepad != null) gamepad.active = false;
 
+        // Triggers are cleared before the layout, because the layout adds the options button and
+        // clearing afterwards would remove its handler again.
         ClearTriggers(row);
-
         UIEventListener.Get(row).onClick = _ => OnRowClicked(mod, row);
+
+        ApplyRowLayout(row, slot, mod);
         slot.enabled = false;
 
         _rows.Add(row);
@@ -699,9 +717,11 @@ internal sealed class NguiModManager
         var textLeft = -width * 0.5f + 10f + CheckboxGutter;
         var hint = StatusHint(mod);
         var hasHint = !string.IsNullOrEmpty(hint);
+        var hasOptions = SettingsScanner.HasSettings(mod);
 
         var name = slot.slot_name;
-        MeasureLabel(name, width - CheckboxGutter - (hasHint ? StatusWidth : 0) - 24, NameFontSize);
+        var reservedRight = (hasHint ? StatusWidth : 0) + (hasOptions ? OptionsArrowSize + 10 : 0);
+        MeasureLabel(name, width - CheckboxGutter - reservedRight - 24, NameFontSize);
         var nameHeight = name != null ? Mathf.Max(18, name.height) : 18;
 
         var descr = slot.txt_descr;
@@ -771,6 +791,8 @@ internal sealed class NguiModManager
         hitbox.size = new Vector2(width, height);
         hitbox.offset = Vector2.zero;
         hitbox.enabled = true;
+
+        ApplyOptionsButton(slot, row, width, height, mod);
     }
 
     /// <summary>
@@ -1193,6 +1215,12 @@ internal sealed class NguiModManager
 
         delegates[GameKey.Back] = () =>
         {
+            if (InSettingsView)
+            {
+                BackToModList();
+                return true;
+            }
+
             CloseWindow();
             return true;
         };
@@ -1208,6 +1236,8 @@ internal sealed class NguiModManager
             UICamera.onScroll -= OnCameraScroll;
             _scrollHooked = false;
         }
+
+        DestroySettingArt();
 
         if (_windowRoot != null) UnityEngine.Object.Destroy(_windowRoot);
         if (_entry != null) UnityEngine.Object.Destroy(_entry);

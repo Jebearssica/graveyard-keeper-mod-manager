@@ -64,6 +64,13 @@ jobs:
             "-p:Version=${{ steps.version.outputs.version }}"
           exit $LASTEXITCODE
 
+      # Editor rules are pure logic; the suite needs neither Unity nor BepInEx.
+      - name: Run settings tests
+        shell: pwsh
+        run: |
+          dotnet run -c Release --project ci/settings-tests/SettingsTests.csproj
+          exit $LASTEXITCODE
+
       - name: Package
         id: package
         shell: pwsh

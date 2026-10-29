@@ -43,3 +43,17 @@ differ only in the assembly metadata hash. The stubs are not an approximation: i
 enum value or default argument were wrong, the emitted IL would differ.
 
 If you change `ci/refs` by hand, verify it that way before checking the change in.
+
+## Settings editor tests
+
+`ci/settings-tests` compiles `src/SettingField.cs` and exercises the editing rules (stepping,
+clamping, typed input, enum cycling, read-only handling, number formatting and the double -&gt; entry
+type conversion). It needs neither Unity nor BepInEx:
+
+```powershell
+dotnet run -c Release --project ci/settings-tests/SettingsTests.csproj
+```
+
+The scanner and the NGUI view cannot run outside the player: they build on `Chainloader.PluginInfos`
+and on Unity structs such as `Vector3`, which cannot even be loaded by the desktop CLR. Those two
+are verified by building and by running the mod in the game.

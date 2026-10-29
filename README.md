@@ -14,6 +14,7 @@ It adds a **MODS** entry to the main menu that opens a list of every installed B
 - **One click per mod** - click a row to enable or disable it. A check box on the left shows the state at a glance.
 - **Readable descriptions** - long mod names and descriptions wrap onto multiple lines instead of being cut off, and each row grows to fit.
 - **Scrolls like you expect** - the list follows the mouse wheel and can also be dragged.
+- **Per-mod options** - mods that expose settings get a `›` button on their row. The settings screen uses the game's own window, arrows and tick marks: click the arrows to step a value, click the value to type a new one, click a key bind to rebind it.
 - **Dependency safety** - disabling a mod that another enabled mod hard-depends on asks for confirmation first.
 - **Restart prompt** - when you close the window after changing something, the manager offers to restart the game for you.
 - **English and Simplified Chinese** - the interface and the built-in mod descriptions follow the game's language setting.
@@ -56,6 +57,22 @@ BepInEx 5 must already be installed and working (the game should show `BepInEx .
    - ✖ red cross - the mod is disabled and will be skipped
    - a padlock - the manager itself, which cannot be disabled from inside the manager
 4. Close the window with the close button, `Esc`, or the gamepad **Back** button.
+
+### Mod options
+
+Rows for loaded mods that expose settings show a `›` button on the right. Click it to open that mod's
+options:
+
+- `✔` / `✖` — on/off settings. Click the row to switch.
+- `‹` `›` — step a number or cycle an enum. Click the value in the middle to type an exact value.
+- key bindings — click the row, then press the key you want. Backspace clears it.
+- colours and vectors are listed one channel/component per row.
+- flag settings (for example a log-level mask) are split into one row per flag.
+- `Esc` or **Back to the mod list** returns to the list; the close button closes the window.
+
+Changes are saved to the mod's `.cfg` immediately and take effect at once for most settings. Settings
+are only offered for mods that are currently loaded, so a disabled mod has to be enabled and the game
+restarted before its options appear.
 
 If you changed anything, you are asked whether to restart now. Choose **Yes** to restart immediately, or **No** to keep playing and restart yourself later.
 

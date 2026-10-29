@@ -63,7 +63,13 @@ public class Plugin : BaseUnityPlugin
         if (_nguiEnabled)
         {
             if (!_ngui.Ready && !_ngui.Failed) _ngui.TryInitialize();
-            if (_ngui.Ready) return;
+            if (_ngui.Ready)
+            {
+                // The native window edits values with the keyboard, so the IMGUI pass is used as
+                // the key event source. It draws nothing while the NGUI window is active.
+                _ngui.HandleKeyboardEvent(Event.current);
+                return;
+            }
         }
 
         _imgui?.OnGUI();

@@ -122,11 +122,11 @@ public class UILabel : UIWidget
     public void ProcessText(bool legacyMode = false, bool full = true) { }
     public void UpdateNGUIText() { }
     public UnityEngine.Vector2 printedSize { get; }
+    public string text { get; set; }
     public NGUIText.Alignment alignment { set { } }
     public int fontSize { set { } }
     public int maxLineCount { set { } }
     public UILabel.Overflow overflowMethod { set { } }
-    public string text { set { } }
     public enum Overflow
     {
         ShrinkContent = 0,

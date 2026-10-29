@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.2.0
+
+- **Per-mod options.** Rows for loaded mods that expose settings show a `›` button; it opens a settings screen inside the same game-styled window.
+  - On/off settings are ticked or crossed, numbers and choices use the game's own arrow buttons, and a value can be typed by clicking it.
+  - Key bindings are rebound by pressing a key; Backspace clears them.
+  - Colours, vectors and flag settings are expanded into one row per channel, component or flag.
+  - Descriptions, section headings and the display options other mods attach to their settings (name, order, read-only, hidden) are respected.
+  - Changes are written to the mod's `.cfg` as soon as they are made.
+- **Esc goes back.** In the settings screen, `Esc` and the gamepad **Back** button return to the mod list instead of closing the window.
+
 ## 1.1.1
 
 - **Fixed two close buttons in the title bar.** The window is drawn wider than the save screen it is cloned from, and the close button's decorative frame was being moved with it, so the frame drifted away from the cross and read as a second button. The frame now stays attached to the cross, matching the game's own windows.

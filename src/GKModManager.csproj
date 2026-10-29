@@ -5,7 +5,7 @@
         <LangVersion>preview</LangVersion>
         <AssemblyName>GKModManager</AssemblyName>
         <RootNamespace>GKModManager</RootNamespace>
-        <Version>1.1.1</Version>
+        <Version>1.2.0</Version>
         <Copyright>GPL-3.0</Copyright>
         <Authors>Jebearssica</Authors>
         <Product>Mod Manager (GYK)</Product>
