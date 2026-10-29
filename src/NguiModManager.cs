@@ -450,6 +450,8 @@ internal sealed partial class NguiModManager
     {
         if (_window == null || !_window.is_shown) return;
 
+        CancelFieldEditing();
+
         if (!HasPendingChanges())
         {
             _window.Hide();
@@ -1215,11 +1217,7 @@ internal sealed partial class NguiModManager
 
         delegates[GameKey.Back] = () =>
         {
-            if (InSettingsView)
-            {
-                BackToModList();
-                return true;
-            }
+            if (HandleBack()) return true;
 
             CloseWindow();
             return true;

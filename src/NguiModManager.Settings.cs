@@ -506,6 +506,7 @@ internal sealed partial class NguiModManager
     {
         try
         {
+            FinishPendingEdit();
             Sounds.OnGUIClick();
             if (field.ReadOnly) return;
 
@@ -545,6 +546,8 @@ internal sealed partial class NguiModManager
     {
         try
         {
+            FinishPendingEdit();
+
             if (field.Kind == SettingKind.Choice) field.Cycle(direction);
             else field.StepBy(direction);
 
@@ -567,6 +570,8 @@ internal sealed partial class NguiModManager
     private void BeginFieldEdit(SettingField field)
     {
         if (field.ReadOnly) return;
+
+        FinishPendingEdit();
 
         _listeningField = null;
         _editingField = field;
@@ -599,6 +604,34 @@ internal sealed partial class NguiModManager
             slot.txt_descr.text = Lang.Get("mm.settings.presskey.desc");
 
         RefreshPanels();
+    }
+
+    /// <summary>
+    /// Applies whatever is being typed before another action runs, so clicking straight from one
+    /// value to another does not silently drop the text that was entered.
+    /// </summary>
+    private void FinishPendingEdit()
+    {
+        if (_editingField != null) CommitFieldEdit();
+        else if (_listeningField != null) CancelFieldEditing();
+    }
+
+    /// <summary>
+    /// Esc / gamepad Back: the first press cancels an edit, the second leaves the settings view.
+    /// Returns false when the caller should close the window.
+    /// </summary>
+    private bool HandleBack()
+    {
+        if (_editingField != null || _listeningField != null)
+        {
+            CancelFieldEditing();
+            return true;
+        }
+
+        if (!InSettingsView) return false;
+
+        BackToModList();
+        return true;
     }
 
     private void CancelFieldEditing()
