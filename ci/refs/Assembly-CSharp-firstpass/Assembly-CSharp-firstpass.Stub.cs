@@ -56,6 +56,7 @@ public class UIButtonColor : UIWidgetContainer
 
 public class UICamera : UnityEngine.MonoBehaviour
 {
+    public static UnityEngine.Vector3 lastWorldPosition;
     public static UICamera.FloatDelegate onScroll;
     public bool useKeyboard;
     public bool useMouse;

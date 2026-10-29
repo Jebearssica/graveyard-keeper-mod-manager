@@ -17,6 +17,7 @@ internal sealed partial class NguiModManager
     private const int SettingsValueWidth = 150;
     private const int SettingsArrowSize = 18;
     private const int SettingsArrowGap = 4;
+    private const int SettingsArrowRightPadding = 12;
     private const int SettingsArrowDepth = 152;
     private const int SettingsValueDepth = 151;
     private const int OptionsArrowSize = 16;
@@ -32,6 +33,7 @@ internal sealed partial class NguiModManager
 
     private Sprite _arrowLeft;
     private Sprite _arrowRight;
+    private Sprite _enterArrow;
     private bool _arrowSpritesReady;
     private bool _generatedArrowArt;
 
@@ -131,7 +133,6 @@ internal sealed partial class NguiModManager
             Sounds.OnGUIClick();
             BackToModList();
         };
-
         _rows.Add(row);
     }
 
@@ -196,30 +197,140 @@ internal sealed partial class NguiModManager
         ApplySettingLayout(row, slot, field, hasIndicator: field.Kind == SettingKind.Toggle,
             hasArrows: field.HasArrows, valueText: field.CurrentText());
 
-        var widget = row.GetComponent<UIWidget>();
-        var width = widget != null ? widget.width : ScrollContentWidth() - 6;
-        var height = widget != null ? widget.height : RowMinHeight;
+        var width = Mathf.RoundToInt(RowWidth(row));
+        if (width <= 0) width = ScrollContentWidth() - 6;
 
-        UIEventListener.Get(row).onClick = _ => OnSettingActivated(field);
-        AddValueEditTarget(row, slot, field);
+        DrawSettingArrows(slot, row, field, width);
 
-        if (field.HasArrows)
-        {
-            EnsureArrowSprites();
-
-            var decX = width * 0.5f - 12f - SettingsArrowSize * 1.5f - SettingsArrowGap;
-            var incX = width * 0.5f - 12f - SettingsArrowSize * 0.5f;
-            var arrowY = height * 0.5f - RowPaddingTop - SettingsArrowSize * 0.5f + 2f;
-
-            AddSettingArrow(slot, row, "setting_dec", _arrowLeft, decX, arrowY, SettingsArrowSize, () => StepField(field, -1));
-            AddSettingArrow(slot, row, "setting_inc", _arrowRight, incX, arrowY, SettingsArrowSize, () => StepField(field, 1));
-        }
+        UIEventListener.Get(row).onClick = _ => OnSettingRowClicked(field, row, width);
+        TrackPress(row);
 
         _fieldRows.Add(new KeyValuePair<SettingField, GameObject>(field, row));
         if (slot.txt_realtime != null)
             _fieldLabels.Add(new KeyValuePair<SettingField, UILabel>(field, slot.txt_realtime));
 
         _rows.Add(row);
+    }
+
+    /// <summary>
+    /// Click zones of a settings row, as fractions of the row width. Layout and hit testing read
+    /// the same offsets, so the drawn arrows and the arrow click zones cannot drift apart.
+    /// </summary>
+    private static RowZones SettingsZones(int width)
+    {
+        if (width <= 0) return new RowZones(0.0, 1.0, 1.0, 1.0);
+
+        var valueWidth = Mathf.Clamp(width / 3, 70, SettingsValueWidth);
+
+        // Fractions measured from the right edge, so they map straight onto the drawing offsets.
+        var arrowsStart = 1.0 - (double)SettingsArrowsLeft / width;
+        var arrowsMiddle = 1.0 - (SettingsDecOffset + SettingsIncOffset) / 2.0 / width;
+        var valueStart = arrowsStart - (double)valueWidth / width;
+        var toggleEnd = (double)ToggleStripWidth / width;
+
+        return new RowZones(
+            Mathf.Clamp01((float)toggleEnd),
+            Mathf.Clamp01((float)arrowsStart),
+            Mathf.Clamp01((float)valueStart),
+            Mathf.Clamp01((float)arrowsMiddle));
+    }
+
+    /// <summary>Distance from the right edge to the centre of the left (decrease) arrow.</summary>
+    private static int SettingsDecOffset => SettingsArrowRightPadding + Mathf.RoundToInt(SettingsArrowSize * 1.5f) + SettingsArrowGap;
+
+    /// <summary>Distance from the right edge to the centre of the right (increase) arrow.</summary>
+    private static int SettingsIncOffset => SettingsArrowRightPadding + SettingsArrowSize / 2;
+
+    /// <summary>Distance from the right edge to the left edge of the decrease arrow's box.</summary>
+    private static int SettingsArrowsLeft => SettingsDecOffset + SettingsArrowSize / 2;
+
+    /// <summary>
+    /// One handler per settings row: the position decides between the check box, the value column,
+    /// the two arrows and the row itself.
+    /// </summary>
+    private void OnSettingRowClicked(SettingField field, GameObject row, int width)
+    {
+        try
+        {
+            var action = RowHitTest.ResolveSettingRow(ClickFraction(row), SettingsZones(width), field.Kind,
+                field.ReadOnly);
+
+            switch (action)
+            {
+                case RowAction.Toggle:
+                    Sounds.OnGUIClick();
+                    field.Write(!(bool)field.Read());
+                    UpdateFieldRow(field);
+                    break;
+                case RowAction.Decrease:
+                    Sounds.OnGUIClick();
+                    StepField(field, -1);
+                    break;
+                case RowAction.Increase:
+                    Sounds.OnGUIClick();
+                    StepField(field, 1);
+                    break;
+                case RowAction.Open:
+                    Sounds.OnGUIClick();
+                    ActivateField(field);
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            Plugin.Log.LogError($"NGUI: could not change setting '{field.Label}': {ex}");
+        }
+    }
+
+    /// <summary>The row's own action, used when neither the check box nor the arrows were hit.</summary>
+    private void ActivateField(SettingField field)
+    {
+        FinishPendingEdit();
+        if (field.ReadOnly) return;
+
+        switch (field.Kind)
+        {
+            case SettingKind.Toggle:
+                field.Write(!(bool)field.Read());
+                UpdateFieldRow(field);
+                break;
+            case SettingKind.Choice:
+                // Typing an exact name only makes sense from the value column, which reports Open
+                // as well; the row body simply steps forward.
+                field.Cycle(1);
+                UpdateFieldRow(field);
+                break;
+            case SettingKind.Number:
+                field.StepBy(1);
+                UpdateFieldRow(field);
+                break;
+            case SettingKind.Key:
+                BeginKeyCapture(field);
+                break;
+            case SettingKind.Text:
+                BeginFieldEdit(field);
+                break;
+        }
+    }
+
+    /// <summary>Draws the two stepper arrows. They are decoration; the row handler does the work.</summary>
+    private void DrawSettingArrows(SaveSlotGUI slot, GameObject row, SettingField field, int width)
+    {
+        if (!field.HasArrows || slot.delete_button == null) return;
+
+        EnsureArrowSprites();
+
+        var widget = row.GetComponent<UIWidget>();
+        var height = widget != null ? widget.height : RowMinHeight;
+        var arrowWidth = SettingsArrowSize;
+        var arrowHeight = Mathf.RoundToInt(SettingsArrowSize * 30f / 24f);
+
+        var decX = width * 0.5f - SettingsDecOffset;
+        var incX = width * 0.5f - SettingsIncOffset;
+        var arrowY = height * 0.5f - RowPaddingTop - arrowHeight * 0.5f + 2f;
+
+        ConfigureArrowVisual(slot, row, "setting_dec", _arrowLeft, decX, arrowY, arrowWidth, arrowHeight);
+        ConfigureArrowVisual(slot, row, "setting_inc", _arrowRight, incX, arrowY, arrowWidth, arrowHeight);
     }
 
     /// <summary>
@@ -233,7 +344,10 @@ internal sealed partial class NguiModManager
         if (width < 200) width = 480;
 
         var gutter = hasIndicator ? CheckboxGutter : 12;
-        var arrows = hasArrows ? SettingsArrowSize * 2 + SettingsArrowGap + 8 : 0;
+
+        // The arrow zone width comes from the same helper the click handler uses, so the drawn
+        // arrows and their click zones always line up.
+        var arrows = hasArrows ? SettingsArrowsLeft : 0;
         var valueWidth = Mathf.Clamp(width / 3, 70, SettingsValueWidth);
         var textLeft = -width * 0.5f + 12f + gutter;
         var textWidth = width - 12 - gutter - valueWidth - arrows - 14;
@@ -304,7 +418,7 @@ internal sealed partial class NguiModManager
                 value.depth = SettingsValueDepth;
                 value.text = valueText;
                 value.transform.localPosition = new Vector3(
-                    width * 0.5f - 12f - arrows,
+                    width * 0.5f - arrows,
                     height * 0.5f - RowPaddingTop,
                     0f);
             }
@@ -365,36 +479,10 @@ internal sealed partial class NguiModManager
         hitbox.enabled = true;
     }
 
-    /// <summary>
-    /// Numbers, choices and text are edited by clicking the value itself; the value gets its own
-    /// collider so that click lands on the value instead of toggling the row.
-    /// </summary>
-    private void AddValueEditTarget(GameObject row, SaveSlotGUI slot, SettingField field)
+    /// <summary>Creates or updates one of the small arrow sprites. It carries no collider.</summary>
+    private void ConfigureArrowVisual(SaveSlotGUI slot, GameObject row, string name, Sprite art,
+        float x, float y, int width, int height)
     {
-        if (field.ReadOnly) return;
-        if (field.Kind != SettingKind.Number && field.Kind != SettingKind.Text && field.Kind != SettingKind.Choice) return;
-        if (slot.txt_realtime == null || !slot.txt_realtime.gameObject.activeSelf) return;
-
-        var target = slot.txt_realtime.gameObject;
-
-        var collider = target.GetComponent<BoxCollider2D>();
-        if (collider == null) collider = target.AddComponent<BoxCollider2D>();
-        collider.size = new Vector2(Mathf.Max(60, slot.txt_realtime.width), 22f);
-        collider.offset = Vector2.zero;
-        collider.enabled = true;
-
-        UIEventListener.Get(target).onClick = _ =>
-        {
-            Sounds.OnGUIClick();
-            BeginFieldEdit(field);
-        };
-    }
-
-    private void AddSettingArrow(SaveSlotGUI slot, GameObject row, string name, Sprite art, float x, float y,
-        int size, Action onClick)
-    {
-        if (slot.delete_button == null) return;
-
         var existing = row.transform.Find(name);
         var go = existing != null
             ? existing.gameObject
@@ -404,42 +492,39 @@ internal sealed partial class NguiModManager
         go.SetActive(true);
 
         ClearTriggers(go);
+        foreach (var collider in go.GetComponents<Collider2D>()) collider.enabled = false;
 
         var sprite = go.GetComponent<UI2DSprite>();
         if (sprite == null) return;
 
-        ConfigureCheckboxSprite(sprite, art, size, SettingsArrowDepth, x, y);
-
-        foreach (var collider in go.GetComponents<Collider2D>()) collider.enabled = false;
-
-        var box = go.GetComponent<BoxCollider2D>();
-        if (box == null) box = go.AddComponent<BoxCollider2D>();
-        box.size = new Vector2(size + 8f, size + 8f);
-        box.offset = Vector2.zero;
-        box.enabled = true;
-
-        UIEventListener.Get(go).onClick = _ =>
-        {
-            Sounds.OnGUIClick();
-            onClick();
-        };
+        sprite.sprite2D = art;
+        ClearAnchors(sprite);
+        sprite.width = width;
+        sprite.height = height;
+        sprite.depth = SettingsArrowDepth;
+        sprite.transform.localPosition = new Vector3(x, y, 0f);
     }
 
     /// <summary>
-    /// Adds the small arrow that opens a mod's settings on the mod list row. Mods that are not
-    /// loaded have no config object, so they get no arrow.
+    /// Draws the chevron that tells the player a mod has options. It is decoration only: the row's
+    /// own click handler opens the options, so there is no second hit target to mis-hit.
     /// </summary>
-    private void ApplyOptionsButton(SaveSlotGUI slot, GameObject row, int width, int height, ModEntry mod)
+    private void ApplyOptionsHint(SaveSlotGUI slot, GameObject row, int width, int height, bool hasOptions)
     {
-        if (slot.delete_button == null || !SettingsScanner.HasSettings(mod)) return;
+        if (slot.delete_button == null) return;
+
+        var existing = row.transform.Find("mod_options");
+        if (!hasOptions)
+        {
+            if (existing != null) existing.gameObject.SetActive(false);
+            return;
+        }
 
         EnsureArrowSprites();
-        EnsureCheckboxSprites();
 
-        var x = width * 0.5f - 14f - OptionsArrowSize * 0.5f;
-        var y = height * 0.5f - RowPaddingTop - NameFontSize * 0.5f;
-        AddSettingArrow(slot, row, "mod_options", _arrowRight ?? _checkboxOn, x, y, OptionsArrowSize,
-            () => OpenSettings(mod));
+        var x = width * 0.5f - 16f - OptionsArrowSize * 0.5f;
+        var y = height * 0.5f - RowPaddingTop - NameFontSize * 0.5f - 1f;
+        ConfigureArrowVisual(slot, row, "mod_options", _enterArrow, x, y, OptionsArrowSize, OptionsArrowSize);
     }
 
     private void EnsureArrowSprites()
@@ -447,11 +532,16 @@ internal sealed partial class NguiModManager
         if (_arrowSpritesReady) return;
         _arrowSpritesReady = true;
 
+        // Paging chevrons from the trade window, drawn at their native 24:30 aspect.
         _arrowLeft = FindGameSprite("trade_wndw_arrow_left");
         _arrowRight = FindGameSprite("trade_wndw_arrow_right");
 
+        // A solid triangle reads better as "open this", and being square it scales cleanly.
+        _enterArrow = FindGameSprite("ui_reply_arrow");
+
         if (_arrowLeft == null) _arrowLeft = FindGameSprite("small_arrow");
         if (_arrowRight == null) _arrowRight = FindGameSprite("small_arrow");
+        if (_enterArrow == null) _enterArrow = _arrowRight;
 
         if (_arrowLeft == null)
         {
@@ -465,8 +555,17 @@ internal sealed partial class NguiModManager
             _generatedArrowArt = true;
         }
 
+        if (_enterArrow == null)
+        {
+            _enterArrow = CreateArrowSprite(true);
+            _generatedArrowArt = true;
+        }
+
         if (_generatedArrowArt)
             Plugin.Log.LogWarning("NGUI: arrow sprites not found, using generated chevrons for the arrow buttons.");
+        else
+            Plugin.Log.LogInfo(
+                $"NGUI: arrow art left='{_arrowLeft.name}' right='{_arrowRight.name}' enter='{_enterArrow.name}'");
     }
 
     /// <summary>Fallback chevron, used only when the game's own arrow sprites cannot be resolved.</summary>
@@ -501,46 +600,6 @@ internal sealed partial class NguiModManager
     }
 
     // ---- interaction ------------------------------------------------------
-
-    private void OnSettingActivated(SettingField field)
-    {
-        try
-        {
-            FinishPendingEdit();
-            Sounds.OnGUIClick();
-            if (field.ReadOnly) return;
-
-            switch (field.Kind)
-            {
-                case SettingKind.Toggle:
-                    field.Write(!(bool)field.Read());
-                    UpdateFieldRow(field);
-                    break;
-
-                case SettingKind.Choice:
-                    field.Cycle(1);
-                    UpdateFieldRow(field);
-                    break;
-
-                case SettingKind.Number:
-                    field.StepBy(1);
-                    UpdateFieldRow(field);
-                    break;
-
-                case SettingKind.Key:
-                    BeginKeyCapture(field);
-                    break;
-
-                case SettingKind.Text:
-                    BeginFieldEdit(field);
-                    break;
-            }
-        }
-        catch (Exception ex)
-        {
-            Plugin.Log.LogError($"NGUI: could not change setting '{field.Label}': {ex}");
-        }
-    }
 
     private void StepField(SettingField field, int direction)
     {
@@ -810,11 +869,13 @@ internal sealed partial class NguiModManager
         {
             DestroySprite(ref _arrowLeft);
             DestroySprite(ref _arrowRight);
+            if (_enterArrow != _arrowRight) DestroySprite(ref _enterArrow);
             _generatedArrowArt = false;
         }
 
         _arrowLeft = null;
         _arrowRight = null;
+        _enterArrow = null;
         _arrowSpritesReady = false;
         _settingsFields.Clear();
         _fieldLabels.Clear();

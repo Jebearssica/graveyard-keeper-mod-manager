@@ -2,7 +2,9 @@
 
 ## 1.2.0
 
-- **Per-mod options.** Rows for loaded mods that expose settings show a `›` button; it opens a settings screen inside the same game-styled window.
+- **Per-mod options.** Clicking a mod's row opens a settings screen inside the same game-styled window.
+  - The check box at the start of a row is the load/unload switch, and clicking it never opens anything else. The rest of the row opens the options.
+  - Mods that expose no settings keep toggling wherever you click them, so a row never opens an empty screen.
   - On/off settings are ticked or crossed, numbers and choices use the game's own arrow buttons, and a value can be typed by clicking it.
   - Key bindings are rebound by pressing a key; Backspace clears them.
   - Colours, vectors and flag settings are expanded into one row per channel, component or flag.

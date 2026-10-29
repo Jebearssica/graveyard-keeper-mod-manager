@@ -11,10 +11,11 @@ It adds a **MODS** entry to the main menu that opens a list of every installed B
 ## Features
 
 - **Native-looking window** - the list reuses the game's own frame, fonts, scroll view and dialogs, and follows your resolution and UI scale.
-- **One click per mod** - click a row to enable or disable it. A check box on the left shows the state at a glance.
+- **Click the check box to load or unload** - the box on the left of a row is the on/off switch; clicking it never opens anything else. A tick means enabled, a cross means disabled, and the manager's own row shows a padlock.
+- **Click the row for its options** - mods that expose settings open their options screen when you click anywhere else on the row. Mods with nothing to configure keep toggling.
 - **Readable descriptions** - long mod names and descriptions wrap onto multiple lines instead of being cut off, and each row grows to fit.
 - **Scrolls like you expect** - the list follows the mouse wheel and can also be dragged.
-- **Per-mod options** - mods that expose settings get a `›` button on their row. The settings screen uses the game's own window, arrows and tick marks: click the arrows to step a value, click the value to type a new one, click a key bind to rebind it.
+- **Options in the game's own style** - the settings screen uses the game's window, arrows and tick marks: click the arrows to step a value, click the value to type a new one, click a key bind to rebind it.
 - **Dependency safety** - disabling a mod that another enabled mod hard-depends on asks for confirmation first.
 - **Restart prompt** - when you close the window after changing something, the manager offers to restart the game for you.
 - **English and Simplified Chinese** - the interface and the built-in mod descriptions follow the game's language setting.
@@ -52,18 +53,18 @@ BepInEx 5 must already be installed and working (the game should show `BepInEx .
 
 1. On the main menu, click **MODS**.
 2. The window lists every plugin found under `BepInEx\plugins`, each with its name, version and a short description.
-3. Click a row to toggle that mod.
+3. **Load or unload a mod** by clicking the check box at the start of its row.
    - ✔ green tick - the mod is enabled and will load on the next start
    - ✖ red cross - the mod is disabled and will be skipped
    - a padlock - the manager itself, which cannot be disabled from inside the manager
-4. Close the window with the close button, `Esc`, or the gamepad **Back** button.
+4. **Open a mod's options** by clicking anywhere else on its row. A row shows a `›` hint when the mod has settings; mods without settings simply toggle instead, so there is never an empty screen to open.
+5. Close the window with the close button, `Esc`, or the gamepad **Back** button.
 
 ### Mod options
 
-Rows for loaded mods that expose settings show a `›` button on the right. Click it to open that mod's
-options:
+Clicking a mod's row (anywhere but its check box) opens that mod's options:
 
-- `✔` / `✖` — on/off settings. Click the row to switch.
+- `✔` / `✖` — on/off settings. Click the box, or the row.
 - `‹` `›` — step a number or cycle an enum. Click the value in the middle to type an exact value.
 - key bindings — click the row, then press the key you want. Backspace clears it.
 - colours and vectors are listed one channel/component per row.

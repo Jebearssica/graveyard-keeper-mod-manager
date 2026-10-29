@@ -198,8 +198,72 @@ namespace GkmmSettingsTests
             Check(!SettingValues.IsInteger(typeof(float)), "float is not an integer type");
 
             Console.WriteLine();
+            CheckClickZones();
+
+            Console.WriteLine();
             Console.WriteLine((_checks - _failures) + "/" + _checks + " checks passed.");
             return _failures == 0 ? 0 : 1;
+        }
+
+        /// <summary>
+        /// The click-zone rules. The important guarantee is that clicking the load/unload check box
+        /// can never open the options screen, so the toggle strip is checked exhaustively.
+        /// </summary>
+        private static void CheckClickZones()
+        {
+            const int rowWidth = 498;
+            var toggleEnd = 34.0 / rowWidth;
+            var modZones = RowZones.ModRow(toggleEnd);
+
+            Check(Math.Abs(toggleEnd - 0.0683) < 0.001, "the toggle strip is ~7% of a 498-unit row");
+            CheckEqual(RowAction.Toggle, RowHitTest.ResolveModRow(0.0, modZones, true), "click at the very left toggles");
+            CheckEqual(RowAction.Toggle, RowHitTest.ResolveModRow(toggleEnd, modZones, true), "the toggle strip's right edge still toggles");
+            CheckEqual(RowAction.Toggle, RowHitTest.ResolveModRow(toggleEnd - 0.0001, modZones, true), "just inside the strip toggles");
+            CheckEqual(RowAction.Open, RowHitTest.ResolveModRow(toggleEnd + 0.0001, modZones, true), "just outside the strip opens options");
+            CheckEqual(RowAction.Open, RowHitTest.ResolveModRow(0.5, modZones, true), "the middle of the row opens options");
+            CheckEqual(RowAction.Open, RowHitTest.ResolveModRow(1.0, modZones, true), "the right edge opens options");
+            CheckEqual(RowAction.Toggle, RowHitTest.ResolveModRow(0.5, modZones, false), "a mod without options still toggles");
+            CheckEqual(RowAction.Ignore, RowHitTest.ResolveModRow(-0.2, modZones, true), "a click left of the row is ignored");
+            CheckEqual(RowAction.Ignore, RowHitTest.ResolveModRow(1.2, modZones, true), "a click right of the row is ignored");
+            CheckEqual(RowAction.Ignore, RowHitTest.ResolveModRow(double.NaN, modZones, true), "an unknown position is ignored");
+
+            // Exhaustive: no position inside the toggle strip may ever open the options.
+            var openedInStrip = 0;
+            for (var i = 0; i <= 2000; i++)
+            {
+                var t = toggleEnd * i / 2000.0;
+                if (RowHitTest.ResolveModRow(t, modZones, true) != RowAction.Toggle) openedInStrip++;
+            }
+            CheckEqual(0, openedInStrip, "no point inside the toggle strip opens the options (2001 samples)");
+
+            // Settings rows: 498 units wide, arrows at 43 and 21 from the right, value 150 wide.
+            const double width = 498.0;
+            var arrowsStart = 1.0 - 52.0 / width;
+            var arrowsMiddle = 1.0 - 32.0 / width;
+            var valueStart = arrowsStart - 150.0 / width;
+            var zones = new RowZones(34.0 / width, arrowsStart, valueStart, arrowsMiddle);
+
+            CheckEqual(RowAction.Decrease, RowHitTest.ResolveSettingRow(arrowsStart, zones, SettingKind.Number, false), "the left arrow steps down");
+            CheckEqual(RowAction.Decrease, RowHitTest.ResolveSettingRow(arrowsMiddle - 0.0001, zones, SettingKind.Number, false), "the left of the gap steps down");
+            CheckEqual(RowAction.Increase, RowHitTest.ResolveSettingRow(arrowsMiddle, zones, SettingKind.Number, false), "the right of the gap steps up");
+            CheckEqual(RowAction.Increase, RowHitTest.ResolveSettingRow(1.0, zones, SettingKind.Choice, false), "the right arrow cycles forward");
+            CheckEqual(RowAction.Open, RowHitTest.ResolveSettingRow(0.5, zones, SettingKind.Number, false), "the row body steps a number");
+            CheckEqual(RowAction.Open, RowHitTest.ResolveSettingRow(valueStart, zones, SettingKind.Number, false), "the value column starts editing");
+            CheckEqual(RowAction.Open, RowHitTest.ResolveSettingRow(valueStart, zones, SettingKind.Text, false), "the value column starts typing");
+            CheckEqual(RowAction.Toggle, RowHitTest.ResolveSettingRow(0.01, zones, SettingKind.Toggle, false), "the check box flips a boolean");
+            CheckEqual(RowAction.Open, RowHitTest.ResolveSettingRow(0.01, zones, SettingKind.Number, false), "the left edge of a number row is not a toggle");
+            CheckEqual(RowAction.Ignore, RowHitTest.ResolveSettingRow(0.5, zones, SettingKind.Number, true), "read-only rows ignore clicks");
+            CheckEqual(RowAction.Ignore, RowHitTest.ResolveSettingRow(arrowsStart, zones, SettingKind.Number, true), "read-only arrows are inert");
+            CheckEqual(RowAction.Ignore, RowHitTest.ResolveSettingRow(-0.5, zones, SettingKind.Number, false), "clicks outside the row are ignored");
+
+            var arrowLeak = 0;
+            for (var i = 0; i <= 1000; i++)
+            {
+                var t = arrowsStart + (1.0 - arrowsStart) * i / 1000.0;
+                var action = RowHitTest.ResolveSettingRow(t, zones, SettingKind.Number, false);
+                if (action != RowAction.Decrease && action != RowAction.Increase) arrowLeak++;
+            }
+            CheckEqual(0, arrowLeak, "every point in the arrow zone steps the value (1001 samples)");
         }
     }
 }

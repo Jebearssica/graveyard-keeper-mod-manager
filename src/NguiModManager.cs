@@ -32,6 +32,12 @@ internal sealed partial class NguiModManager
     private const int CheckboxSize = 18;
     private const int CheckboxIconSize = 12;
     private const int CheckboxGutter = 30;
+
+    /// <summary>
+    /// Width of the left strip that loads/unloads a mod. It covers the check box plus a little
+    /// padding, and stops before the mod name starts (see <see cref="CheckboxGutter"/>).
+    /// </summary>
+    private const int ToggleStripWidth = 34;
     private const int StatusWidth = 130;
     private const int WheelStep = 56;
     private const uint SteamAppId = 599140;
@@ -64,6 +70,8 @@ internal sealed partial class NguiModManager
     private float _nextAttempt;
     private int _initAttempts;
     private bool _scrollHooked;
+    private GameObject _pressedRow;
+    private Vector3 _pressedPoint;
     private Sprite _checkboxOn;
     private Sprite _checkboxOff;
     private Sprite _checkboxFrame;
@@ -696,9 +704,10 @@ internal sealed partial class NguiModManager
         var gamepad = row.GetComponent<GamepadNavigationItem>();
         if (gamepad != null) gamepad.active = false;
 
-        // Triggers are cleared before the layout, because the layout adds the options button and
-        // clearing afterwards would remove its handler again.
+        // Triggers are cleared before the layout, because the layout adds the options hint and
+        // clearing afterwards would remove the handlers again.
         ClearTriggers(row);
+        TrackPress(row);
         UIEventListener.Get(row).onClick = _ => OnRowClicked(mod, row);
 
         ApplyRowLayout(row, slot, mod);
@@ -722,7 +731,7 @@ internal sealed partial class NguiModManager
         var hasOptions = SettingsScanner.HasSettings(mod);
 
         var name = slot.slot_name;
-        var reservedRight = (hasHint ? StatusWidth : 0) + (hasOptions ? OptionsArrowSize + 10 : 0);
+        var reservedRight = (hasHint ? StatusWidth : 0) + (hasOptions ? OptionsArrowSize + 12 : 0);
         MeasureLabel(name, width - CheckboxGutter - reservedRight - 24, NameFontSize);
         var nameHeight = name != null ? Mathf.Max(18, name.height) : 18;
 
@@ -794,7 +803,7 @@ internal sealed partial class NguiModManager
         hitbox.offset = Vector2.zero;
         hitbox.enabled = true;
 
-        ApplyOptionsButton(slot, row, width, height, mod);
+        ApplyOptionsHint(slot, row, width, height, hasOptions);
     }
 
     /// <summary>
@@ -1041,36 +1050,91 @@ internal sealed partial class NguiModManager
             1f);
     }
 
+    /// <summary>
+    /// A click on a mod row. The check box column loads/unloads the mod; everywhere else opens the
+    /// mod's options. Clicking the check box therefore never opens the options screen.
+    /// </summary>
     private void OnRowClicked(ModEntry mod, GameObject row)
     {
         try
         {
             Sounds.OnGUIClick();
 
-            if (mod.IsManager)
-            {
-                GUIElements.me.dialog.OpenOK(Lang.Get("mm.note.manager"));
-                return;
-            }
+            var action = RowHitTest.ResolveModRow(ClickFraction(row), RowZones.ModRow(ToggleZoneFraction(row)),
+                SettingsScanner.HasSettings(mod));
 
-            if (mod.Enabled)
-            {
-                var dependents = ModToggler.FindHardDependents(mod, _mods);
-                if (dependents.Count > 0)
-                {
-                    var names = string.Join(", ", dependents.Select(entry => entry.DisplayName).ToArray());
-                    var message = string.Format(Lang.Get("mm.confirm.disable"), mod.DisplayName, names);
-                    GUIElements.me.dialog.OpenYesNo(message, () => ApplyToggle(mod, row), null);
-                    return;
-                }
-            }
-
-            ApplyToggle(mod, row);
+            if (action == RowAction.Toggle) ToggleMod(mod, row);
+            else if (action == RowAction.Open) OpenSettings(mod);
         }
         catch (Exception ex)
         {
             Plugin.Log.LogError($"NGUI row click failed: {ex}");
         }
+    }
+
+    /// <summary>Loads or unloads a mod, with the same confirmations as before.</summary>
+    private void ToggleMod(ModEntry mod, GameObject row)
+    {
+        if (mod.IsManager)
+        {
+            GUIElements.me.dialog.OpenOK(Lang.Get("mm.note.manager"));
+            return;
+        }
+
+        if (mod.Enabled)
+        {
+            var dependents = ModToggler.FindHardDependents(mod, _mods);
+            if (dependents.Count > 0)
+            {
+                var names = string.Join(", ", dependents.Select(entry => entry.DisplayName).ToArray());
+                var message = string.Format(Lang.Get("mm.confirm.disable"), mod.DisplayName, names);
+                GUIElements.me.dialog.OpenYesNo(message, () => ApplyToggle(mod, row), null);
+                return;
+            }
+        }
+
+        ApplyToggle(mod, row);
+    }
+
+    /// <summary>
+    /// Where the click landed across the row: 0 at the left edge, 1 at the right edge. The position
+    /// is the one recorded when the mouse went down on this same row, so a stale value from an
+    /// earlier click elsewhere can never decide the action.
+    /// </summary>
+    private double ClickFraction(GameObject row)
+    {
+        var box = row != null ? row.GetComponent<BoxCollider2D>() : null;
+        if (box == null) return 0.5;
+
+        var bounds = box.bounds;
+        if (bounds.size.x <= 0f) return 0.5;
+
+        var point = ReferenceEquals(_pressedRow, row) ? _pressedPoint : UICamera.lastWorldPosition;
+        return (point.x - bounds.min.x) / bounds.size.x;
+    }
+
+    /// <summary>Records where the mouse went down, per row.</summary>
+    private void TrackPress(GameObject row)
+    {
+        UIEventListener.Get(row).onPress = (go, pressed) =>
+        {
+            if (!pressed) return;
+
+            _pressedRow = row;
+            _pressedPoint = UICamera.lastWorldPosition;
+        };
+    }
+
+    private double ToggleZoneFraction(GameObject row)
+    {
+        var width = RowWidth(row);
+        return width <= 0f ? 0.0 : ToggleStripWidth / width;
+    }
+
+    private static float RowWidth(GameObject row)
+    {
+        var widget = row != null ? row.GetComponent<UIWidget>() : null;
+        return widget != null ? widget.width : 0f;
     }
 
     private void ApplyToggle(ModEntry mod, GameObject row)

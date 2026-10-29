@@ -166,8 +166,7 @@ internal sealed class SettingField
 }
 
 /// <summary>Value conversions shared by the scanner and the editor.</summary>
-internal static class SettingValues
-{
+internal static class SettingValues{
     /// <summary>
     /// Converts an edited double back to the exact type the config entry stores.
     /// <c>ConfigEntry&lt;T&gt;.BoxedValue</c> casts instead of converting, so an int entry has to be
@@ -209,4 +208,86 @@ internal static class SettingValues
     internal static bool IsInteger(Type type) =>
         type == typeof(int) || type == typeof(long) || type == typeof(short) || type == typeof(byte) ||
         type == typeof(uint) || type == typeof(ulong) || type == typeof(ushort) || type == typeof(sbyte);
+}
+
+/// <summary>What a click on a row should do, decided from where on the row it landed.</summary>
+internal enum RowAction
+{
+    /// <summary>No action (read-only row, or a click outside the row).</summary>
+    Ignore,
+
+    /// <summary>Flip an on/off state: load/unload a mod, or switch a boolean setting.</summary>
+    Toggle,
+
+    /// <summary>Open a mod's options, or start typing the value of a setting.</summary>
+    Open,
+
+    /// <summary>Step or cycle the value backwards.</summary>
+    Decrease,
+
+    /// <summary>Step or cycle the value forwards.</summary>
+    Increase
+}
+
+/// <summary>
+/// Click zones of one row as fractions of its width, measured from the left edge (0) to the
+/// right edge (1). A zone that does not apply is left at its neutral value: 0 for
+/// <see cref="ToggleEnd"/>, 1 for <see cref="ArrowsStart"/> and <see cref="ValueStart"/>.
+/// </summary>
+internal readonly struct RowZones
+{
+    internal RowZones(double toggleEnd, double arrowsStart, double valueStart, double arrowsMiddle)
+    {
+        ToggleEnd = toggleEnd;
+        ArrowsStart = arrowsStart;
+        ValueStart = valueStart;
+        ArrowsMiddle = arrowsMiddle;
+    }
+
+    internal double ToggleEnd { get; }
+    internal double ArrowsStart { get; }
+    internal double ValueStart { get; }
+
+    /// <summary>Boundary between the decrease and increase halves of the arrow zone.</summary>
+    internal double ArrowsMiddle { get; }
+
+    internal static RowZones ModRow(double toggleEnd) => new RowZones(toggleEnd, 1.0, 1.0, 1.0);
+}
+
+/// <summary>
+/// Decides what a click does, purely from its horizontal position inside the row. Turned into its
+/// own type so the rule "clicking the check box always toggles and never opens the options" can be
+/// verified without the game running.
+/// </summary>
+internal static class RowHitTest
+{
+    /// <summary>
+    /// A click on a mod row: the check box column toggles, the rest opens the options. Rows with
+    /// nothing to configure keep toggling everywhere, because there is no options screen to open.
+    /// </summary>
+    internal static RowAction ResolveModRow(double t, in RowZones zones, bool hasOptions)
+    {
+        if (double.IsNaN(t) || t < 0.0 || t > 1.0) return RowAction.Ignore;
+        if (t <= zones.ToggleEnd) return RowAction.Toggle;
+        return hasOptions ? RowAction.Open : RowAction.Toggle;
+    }
+
+    /// <summary>A click on a setting row: check box, value column, the two arrows, or the rest.</summary>
+    internal static RowAction ResolveSettingRow(double t, in RowZones zones, SettingKind kind, bool readOnly)
+    {
+        if (readOnly) return RowAction.Ignore;
+        if (double.IsNaN(t) || t < 0.0 || t > 1.0) return RowAction.Ignore;
+
+        if (zones.ArrowsStart < 1.0 && t >= zones.ArrowsStart)
+            return t < zones.ArrowsMiddle ? RowAction.Decrease : RowAction.Increase;
+
+        if (zones.ToggleEnd > 0.0 && t <= zones.ToggleEnd && kind == SettingKind.Toggle)
+            return RowAction.Toggle;
+
+        if (zones.ValueStart < 1.0 && t >= zones.ValueStart &&
+            (kind == SettingKind.Number || kind == SettingKind.Text || kind == SettingKind.Choice))
+            return RowAction.Open;
+
+        return RowAction.Open;
+    }
 }
