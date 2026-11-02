@@ -14,7 +14,10 @@
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
         <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
         <NoWarn>CS1591;Publicizer001</NoWarn>
-        <DebugType>portable</DebugType>
+        <!-- No debug symbols in the shipped assembly: PDB paths would embed local directories. -->
+        <DebugType>none</DebugType>
+        <DebugSymbols>false</DebugSymbols>
+        <PathMap>$(MSBuildProjectDirectory)=/_/</PathMap>
         <Deterministic>true</Deterministic>
         <!-- Keep the published DLL free of the git commit hash the SDK would append. -->
         <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>

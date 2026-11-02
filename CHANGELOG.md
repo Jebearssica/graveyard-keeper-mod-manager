@@ -11,6 +11,7 @@
   - Descriptions, section headings and the display options other mods attach to their settings (name, order, read-only, hidden) are respected.
   - Changes are written to the mod's `.cfg` as soon as they are made.
 - **Esc goes back.** In the settings screen, `Esc` and the gamepad **Back** button return to the mod list instead of closing the window.
+- **Release builds no longer embed local paths.** The shipped DLL is built without debug symbols and with a mapped source path, so a PDB path cannot expose the builder's user name or directories.
 
 ## 1.1.1
 

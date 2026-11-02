@@ -115,6 +115,26 @@ jobs:
           $zip = [System.IO.Compression.ZipFile]::OpenRead((Join-Path (Get-Location) $name))
           try {
             $entries = $zip.Entries | ForEach-Object { $_.FullName } | Sort-Object
+
+            # The shipped DLL must not carry the builder's PDB path into a public release.
+            $dll = $zip.GetEntry('BepInEx/plugins/GKModManager/GKModManager.dll')
+            if (-not $dll) { throw 'Package is missing BepInEx/plugins/GKModManager/GKModManager.dll' }
+            $stream = $dll.Open()
+            $reader = $null
+            try {
+              $reader = [System.IO.BinaryReader]::new($stream)
+              $bytes = $reader.ReadBytes([int]$dll.Length)
+            } finally {
+              if ($reader) { $reader.Dispose() }
+              $stream.Dispose()
+            }
+            $dllText = [System.Text.Encoding]::ASCII.GetString($bytes)
+            if ($dllText -match 'RSDS[\s\S]{0,64}[A-Za-z]:\\') {
+              throw 'GKModManager.dll embeds an absolute PDB path'
+            }
+            if ($dllText -match 'C:\\Users\\') {
+              throw 'GKModManager.dll embeds a local user path'
+            }
           } finally {
             $zip.Dispose()
           }
